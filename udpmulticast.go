@@ -9,6 +9,7 @@ import (
 	"sync"
 )
 
+// MultiCastPerr 组播peer
 type MultiCastPerr struct {
 	group        *net.UDPAddr
 	ipv4PConn    *ipv4.PacketConn
@@ -17,7 +18,7 @@ type MultiCastPerr struct {
 	err          error
 }
 
-var pUdpMultiCastPeer = &sync.Pool{
+var pUDPMultiCastPeer = &sync.Pool{
 	New: func() interface{} {
 		peer := new(MultiCastPerr)
 		return peer
@@ -31,11 +32,12 @@ var pBuffer = &sync.Pool{
 	},
 }
 
-func NewMultiCastPeer(groupIp string, groupPort int) *MultiCastPerr {
-	peer := pUdpMultiCastPeer.Get().(*MultiCastPerr)
+// NewMultiCastPeer new peer
+func NewMultiCastPeer(groupIP string, groupPort int) *MultiCastPerr {
+	peer := pUDPMultiCastPeer.Get().(*MultiCastPerr)
 
-	peer.group = &net.UDPAddr{Port: groupPort, IP: net.ParseIP(groupIp)}
-	peer.netPConn, peer.err = net.ListenPacket("udp4", fmt.Sprintf("%s:%d", groupIp, groupPort))
+	peer.group = &net.UDPAddr{Port: groupPort, IP: net.ParseIP(groupIP)}
+	peer.netPConn, peer.err = net.ListenPacket("udp4", fmt.Sprintf("%s:%d", groupIP, groupPort))
 	if nil != peer.err {
 		log.Fatalf("%v", peer.err)
 	}
@@ -44,18 +46,21 @@ func NewMultiCastPeer(groupIp string, groupPort int) *MultiCastPerr {
 	return peer
 }
 
+// Destroy 析构
 func (ths *MultiCastPerr) Destroy() {
 	ths.ipv4PConn.Close()
 
 	ths.netPConn.Close()
-	pUdpMultiCastPeer.Put(ths)
+	pUDPMultiCastPeer.Put(ths)
 }
 
+// OnRecv 设置udp接收回调
 func (ths *MultiCastPerr) OnRecv(recvPacketCB func([]byte, net.Addr, bool)) *MultiCastPerr {
 	ths.recvPacketCB = recvPacketCB
 	return ths
 }
 
+// JoinGroup 加入udp组
 func (ths *MultiCastPerr) JoinGroup() *MultiCastPerr {
 	InterfacesUpAndMulticast(func(i net.Interface) {
 		if err := ths.ipv4PConn.JoinGroup(&i, ths.group); nil != err {
@@ -65,6 +70,7 @@ func (ths *MultiCastPerr) JoinGroup() *MultiCastPerr {
 	return ths
 }
 
+// Listen 监听
 func (ths *MultiCastPerr) Listen() {
 	localIPs := LocalIPs()
 	for {
@@ -92,6 +98,7 @@ func (ths *MultiCastPerr) Listen() {
 	}
 }
 
+// Send 发生dup消息
 func (ths *MultiCastPerr) Send(b []byte) *MultiCastPerr {
 	InterfacesUpAndMulticast(func(i net.Interface) {
 		if err := ths.ipv4PConn.SetMulticastInterface(&i); nil != err {
@@ -105,6 +112,7 @@ func (ths *MultiCastPerr) Send(b []byte) *MultiCastPerr {
 	return ths
 }
 
+// InterfacesUpAndMulticast 所有可用于组播的网卡接口
 func InterfacesUpAndMulticast(cb func(net.Interface)) {
 	ifis, err := net.Interfaces()
 	if nil != err {
@@ -118,6 +126,7 @@ func InterfacesUpAndMulticast(cb func(net.Interface)) {
 	}
 }
 
+// LocalIPs 所有本地ip
 func LocalIPs() (ips map[string]struct{}) {
 	ips = make(map[string]struct{})
 	ips["localhost"] = struct{}{}
